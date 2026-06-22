@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fetchAttendances, fetchClients, fetchPaidDocuments, summarizeClients } from './routerbox.js'
 
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env.local', quiet: true })
 
 const app = express()
 const port = Number(process.env.PORT) || 3001
