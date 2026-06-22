@@ -1,0 +1,10 @@
+:root {
+  font-family: Roboto, Arial, sans-serif;
+  color: #172b3a;
+  background: #f4f7f9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
