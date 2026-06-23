@@ -112,8 +112,13 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
 
   addKpi(doc, 14, 43, 42, 'Clientes ativos', (clientStatuses.active || 0).toLocaleString('pt-BR'), COLORS.primary)
   addKpi(doc, 60, 43, 42, 'Total de clientes', (clients?.total || 0).toLocaleString('pt-BR'), COLORS.success)
-  addKpi(doc, 106, 43, 42, 'Recebimento liquido', money.format(financialTotals.net || 0), [139, 109, 177])
+  addKpi(doc, 106, 43, 42, 'Sem desconto', money.format(financialTotals.original || 0), [139, 109, 177])
   addKpi(doc, 152, 43, 44, 'Atendimentos abertos', (attendanceTotals.open || 0).toLocaleString('pt-BR'), [226, 123, 88])
+
+  doc.setTextColor(...COLORS.muted)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text(`Com desconto: ${money.format(financialTotals.received || 0)}`, 106, 69)
 
   let y = addSectionTitle(doc, 'Clientes por situacao', 75)
   autoTable(doc, {
@@ -141,13 +146,14 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
   y = addSectionTitle(doc, 'Financeiro por grupo', doc.lastAutoTable.finalY + 12)
   autoTable(doc, {
     startY: y,
-    head: [['Grupo', 'Docs.', 'Recebimentos', 'Ajustes', 'Liquido', '%']],
+    head: [['Grupo', 'Docs.', 'Original', 'Juros/multa', 'Descontos', 'Baixado', '%']],
     body: (financial?.groups || []).map((group) => [
       `${group.groupId ? `${group.groupId} - ` : ''}${group.groupName}`,
       group.paidDocuments.toLocaleString('pt-BR'),
-      money.format(group.entries),
-      money.format(group.adjustments),
-      money.format(group.net),
+      money.format(group.original),
+      money.format(group.fees),
+      money.format(group.discounts),
+      money.format(group.received),
       `${group.share.toFixed(1).replace('.', ',')}%`,
     ]),
     theme: 'grid',
@@ -161,6 +167,7 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
       3: { halign: 'right' },
       4: { halign: 'right' },
       5: { halign: 'right' },
+      6: { halign: 'right' },
     },
   })
 

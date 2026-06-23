@@ -125,6 +125,31 @@ function KpiCard({ title, value, detail, icon: Icon, color, tint }) {
   )
 }
 
+function FinancialKpiCard({ original = 0, received = 0, discount = 0 }) {
+  return (
+    <Paper className="kpi-card financial-kpi-card">
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+        <Avatar variant="rounded" sx={{ bgcolor: '#F0EAF6', color: '#8B6DB1', width: 44, height: 44 }}>
+          <AccountBalanceWalletRoundedIcon />
+        </Avatar>
+        <Chip size="small" color="error" variant="outlined" label={`${compactMoney.format(discount)} descontos`} />
+      </Stack>
+      <Typography color="text.secondary" mt={2}>Financeiro do período</Typography>
+      <Box className="financial-kpi-values">
+        <Box>
+          <Typography variant="caption" color="text.secondary">Sem desconto</Typography>
+          <Typography className="financial-kpi-value">{compactMoney.format(original)}</Typography>
+        </Box>
+        <Divider orientation="vertical" flexItem />
+        <Box>
+          <Typography variant="caption" color="text.secondary">Com desconto</Typography>
+          <Typography className="financial-kpi-value received">{compactMoney.format(received)}</Typography>
+        </Box>
+      </Box>
+    </Paper>
+  )
+}
+
 function DonutChart({ summary }) {
   const items = clientStatusMeta.map((item) => ({ ...item, value: summary?.statuses?.[item.key] || 0 }))
   const total = summary?.total || 0
@@ -246,7 +271,7 @@ function FinancialByGroupTable({ groups = [] }) {
   return (
     <TableContainer>
       <Table size="small">
-        <TableHead><TableRow>{['Grupo', 'Documentos pagos', 'Recebimentos', 'Ajustes / estornos', 'Líquido', 'Participação'].map(x => <TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
+        <TableHead><TableRow>{['Grupo', 'Documentos', 'Valor original', 'Juros / multa', 'Descontos', 'Valor baixado', 'Participação'].map(x => <TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead>
         <TableBody>
           {groups.map((group) => (
             <TableRow hover key={group.groupId || group.groupName}>
@@ -257,13 +282,14 @@ function FinancialByGroupTable({ groups = [] }) {
                 </Stack>
               </TableCell>
               <TableCell>{group.paidDocuments.toLocaleString('pt-BR')}</TableCell>
-              <TableCell className="positive">{money.format(group.entries)}</TableCell>
-              <TableCell className={group.adjustments < 0 ? 'negative' : ''}>{money.format(group.adjustments)}</TableCell>
-              <TableCell><Typography fontWeight={700} fontSize="inherit">{money.format(group.net)}</Typography></TableCell>
+              <TableCell className="positive">{money.format(group.original)}</TableCell>
+              <TableCell>{money.format(group.fees)}</TableCell>
+              <TableCell className={group.discounts > 0 ? 'negative' : ''}>{money.format(group.discounts)}</TableCell>
+              <TableCell><Typography fontWeight={700} fontSize="inherit">{money.format(group.received)}</Typography></TableCell>
               <TableCell>{group.share.toFixed(1).replace('.', ',')}%</TableCell>
             </TableRow>
           ))}
-          {!groups.length && <TableRow><TableCell colSpan={6} align="center">Nenhuma movimentação no período.</TableCell></TableRow>}
+          {!groups.length && <TableRow><TableCell colSpan={7} align="center">Nenhuma movimentação no período.</TableCell></TableRow>}
         </TableBody>
       </Table>
     </TableContainer>
@@ -323,13 +349,15 @@ function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, on
       </Stack>
       {loading && !data ? <Box className="loading-state"><CircularProgress size={28} /><Typography color="text.secondary">Consultando documentos baixados…</Typography></Box> : <FinancialByGroupTable groups={data?.groups} />}
       <Box className="finance-summary">
-        <Box><Typography variant="caption" color="text.secondary">Recebimentos positivos</Typography><Typography fontWeight={700}>{money.format(totals.positive || 0)}</Typography></Box>
+        <Box><Typography variant="caption" color="text.secondary">Sem desconto (valor original)</Typography><Typography fontWeight={700}>{money.format(totals.original || 0)}</Typography></Box>
         <Divider orientation="vertical" flexItem />
         <Box><Typography variant="caption" color="text.secondary">Documentos pagos</Typography><Typography fontWeight={700}>{(totals.paidDocuments || 0).toLocaleString('pt-BR')}</Typography></Box>
         <Divider orientation="vertical" flexItem />
-        <Box><Typography variant="caption" color="text.secondary">Ajustes / estornos</Typography><Typography fontWeight={700} color="error.main">{money.format(totals.negative || 0)}</Typography></Box>
+        <Box><Typography variant="caption" color="text.secondary">Juros / multa</Typography><Typography fontWeight={700}>{money.format(totals.fees || 0)}</Typography></Box>
         <Divider orientation="vertical" flexItem />
-        <Box><Typography variant="caption" color="text.secondary">Recebimento líquido</Typography><Typography fontWeight={700} color="primary.main">{money.format(totals.net || 0)}</Typography></Box>
+        <Box><Typography variant="caption" color="text.secondary">Descontos</Typography><Typography fontWeight={700} color="error.main">{money.format(totals.discount || 0)}</Typography></Box>
+        <Divider orientation="vertical" flexItem />
+        <Box><Typography variant="caption" color="text.secondary">Com desconto (valor baixado)</Typography><Typography fontWeight={700} color="primary.main">{money.format(totals.received || 0)}</Typography></Box>
       </Box>
       {(totals.duplicatesRemoved || 0) > 0 && (
         <Typography variant="caption" color="text.secondary" display="block" mx={2.5} mb={1}>
@@ -576,7 +604,11 @@ function App() {
           <Box className="kpi-grid">
             <KpiCard title="Clientes ativos" value={activeClients.toLocaleString('pt-BR')} detail={activePercentage} icon={GroupsRoundedIcon} color="#176B87" tint="#DDEFF3" />
             <KpiCard title="Total de clientes" value={totalClients.toLocaleString('pt-BR')} detail="API RouterBox" icon={DescriptionRoundedIcon} color="#2D9C75" tint="#E2F3EC" />
-            <KpiCard title="Recebimento líquido" value={compactMoney.format(financialTotals.net || 0)} detail={`${(financialTotals.paidDocuments || 0).toLocaleString('pt-BR')} docs.`} icon={AccountBalanceWalletRoundedIcon} color="#8B6DB1" tint="#F0EAF6" />
+            <FinancialKpiCard
+              original={financialTotals.original}
+              received={financialTotals.received}
+              discount={financialTotals.discount}
+            />
             <KpiCard title="Atendimentos abertos" value={(attendanceTotals.open || 0).toLocaleString('pt-BR')} detail={`${(attendanceTotals.completed || 0).toLocaleString('pt-BR')} concluídos`} icon={SupportAgentRoundedIcon} color="#E27B58" tint="#FBEAE5" />
           </Box>
 

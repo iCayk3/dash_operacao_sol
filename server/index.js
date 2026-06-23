@@ -55,87 +55,15 @@ function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
-function getFinancialDocumentSignature(document) {
-  return [
-    document.CodigoPessoa,
-    document.Documento,
-    document.NossoNumero,
-    document.DataBaixa,
-    document.DataHoraExecucaoBaixa,
-    document.ValorOriginal,
-    document.ValorJuros,
-    document.ValorMulta,
-    document.ValorDesconto,
-    document.ValorBaixado,
-    document.Motivo,
-    document.Historico,
-    document.HistoricoBaixa,
-    document.UsuarioBaixa,
-  ].map((value) => String(value ?? '').trim()).join('|')
-}
-
-function deduplicateFinancialDocuments(documents) {
-  const signatures = new Set()
-  const uniqueDocuments = []
-
-  for (const document of documents) {
-    const signature = getFinancialDocumentSignature(document)
-    if (signatures.has(signature)) continue
-    signatures.add(signature)
-    uniqueDocuments.push(document)
-  }
-
-  return {
-    documents: uniqueDocuments,
-    duplicatesRemoved: documents.length - uniqueDocuments.length,
-  }
-}
-
 function consolidateFinancialDocuments(documents) {
-  const deduplicated = deduplicateFinancialDocuments(documents)
-  const documentsByBill = new Map()
+  const consolidatedDocuments = documents.filter(
+    (document) => String(document.Historico || '').trim() === 'Documento a receber',
+  )
 
-  for (const document of deduplicated.documents) {
-    const billNumber = document.Documento || document.NossoNumero || document.Sequencia
-    const key = [
-      document.CodigoPessoa,
-      billNumber,
-      document.DataBaixa,
-    ].map((value) => String(value ?? '').trim()).join('|')
-
-    if (!documentsByBill.has(key)) documentsByBill.set(key, new Map())
-
-    const movements = documentsByBill.get(key)
-    const value = roundMoney(Number.parseFloat(document.ValorBaixado) || 0)
-    const valueKey = value.toFixed(2)
-
-    if (!movements.has(valueKey)) {
-      movements.set(valueKey, {
-        ...document,
-        ValorBaixado: value,
-        MovimentosConsolidados: 1,
-      })
-      continue
-    }
-
-    const existing = movements.get(valueKey)
-    existing.MovimentosConsolidados += 1
-
-    const existingHistory = String(existing.Historico || '').trim()
-    const currentHistory = String(document.Historico || '').trim()
-    if (!existingHistory && currentHistory) existing.Historico = document.Historico
-
-    if (String(document.DataHoraExecucaoBaixa) > String(existing.DataHoraExecucaoBaixa)) {
-      existing.DataHoraExecucaoBaixa = document.DataHoraExecucaoBaixa
-      existing.UsuarioBaixa = document.UsuarioBaixa
-    }
-  }
-
-  const consolidatedDocuments = [...documentsByBill.values()].flatMap((movements) => [...movements.values()])
   return {
     documents: consolidatedDocuments,
-    exactDuplicatesRemoved: deduplicated.duplicatesRemoved,
-    movementsConsolidated: deduplicated.documents.length - consolidatedDocuments.length,
+    exactDuplicatesRemoved: 0,
+    movementsConsolidated: documents.length - consolidatedDocuments.length,
   }
 }
 
@@ -166,51 +94,72 @@ function summarizeFinancial(documents, clients, from, to) {
   const groups = new Map()
   const daily = new Map()
   const uniquePositiveDocuments = new Set()
-  let positive = 0
-  let negative = 0
+  let original = 0
+  let interest = 0
+  let fine = 0
+  let discount = 0
+  let received = 0
   let zeroValue = 0
 
   for (const document of uniqueDocuments) {
-    const value = Number.parseFloat(document.ValorBaixado) || 0
+    const originalValue = Number.parseFloat(document.ValorOriginal) || 0
+    const interestValue = Number.parseFloat(document.ValorJuros) || 0
+    const fineValue = Number.parseFloat(document.ValorMulta) || 0
+    const discountValue = Number.parseFloat(document.ValorDesconto) || 0
+    const receivedValue = Number.parseFloat(document.ValorBaixado) || 0
     const group = clientGroups.get(String(document.CodigoPessoa)) || { id: null, name: 'GRUPO NÃO IDENTIFICADO' }
     const groupKey = group.id || group.name
     const date = document.DataBaixa || 'Sem data'
     const documentKey = `${document.CodigoPessoa}:${document.Documento || document.Sequencia}`
 
-    if (!groups.has(groupKey)) groups.set(groupKey, { groupId: group.id, groupName: group.name, entries: 0, adjustments: 0, net: 0, records: 0, paidDocuments: new Set() })
+    if (!groups.has(groupKey)) groups.set(groupKey, {
+      groupId: group.id,
+      groupName: group.name,
+      original: 0,
+      fees: 0,
+      discounts: 0,
+      received: 0,
+      records: 0,
+      paidDocuments: new Set(),
+    })
     const groupData = groups.get(groupKey)
     groupData.records += 1
-    groupData.net += value
+    groupData.original = roundMoney(groupData.original + originalValue)
+    groupData.fees = roundMoney(groupData.fees + interestValue + fineValue)
+    groupData.discounts = roundMoney(groupData.discounts + discountValue)
+    groupData.received = roundMoney(groupData.received + receivedValue)
 
-    if (value > 0) {
-      positive = roundMoney(positive + value)
-      groupData.entries = roundMoney(groupData.entries + value)
+    original = roundMoney(original + originalValue)
+    interest = roundMoney(interest + interestValue)
+    fine = roundMoney(fine + fineValue)
+    discount = roundMoney(discount + discountValue)
+    received = roundMoney(received + receivedValue)
+
+    if (originalValue > 0) {
       groupData.paidDocuments.add(documentKey)
       uniquePositiveDocuments.add(documentKey)
-    } else if (value < 0) {
-      negative = roundMoney(negative + value)
-      groupData.adjustments = roundMoney(groupData.adjustments + value)
-    } else {
+    }
+    if (receivedValue === 0) {
       zeroValue += 1
     }
 
     if (!daily.has(date)) daily.set(date, { date, value: 0, quantity: 0 })
     const day = daily.get(date)
-    day.value = roundMoney(day.value + value)
+    day.value = roundMoney(day.value + originalValue)
     day.quantity += 1
   }
 
-  const net = roundMoney(positive + negative)
   const groupRows = [...groups.values()]
     .map(({ paidDocuments, ...group }) => ({
       ...group,
       paidDocuments: paidDocuments.size,
-      entries: roundMoney(group.entries),
-      adjustments: roundMoney(group.adjustments),
-      net: roundMoney(group.net),
-      share: net ? (group.net / net) * 100 : 0,
+      original: roundMoney(group.original),
+      fees: roundMoney(group.fees),
+      discounts: roundMoney(group.discounts),
+      received: roundMoney(group.received),
+      share: original ? (group.original / original) * 100 : 0,
     }))
-    .sort((a, b) => b.net - a.net)
+    .sort((a, b) => b.original - a.original)
 
   const recent = [...uniqueDocuments]
     .sort((a, b) => String(b.DataHoraExecucaoBaixa || b.DataBaixa).localeCompare(String(a.DataHoraExecucaoBaixa || a.DataBaixa)))
@@ -224,7 +173,7 @@ function summarizeFinancial(documents, clients, from, to) {
       document: document.Documento,
       reason: document.Motivo || 'Não informado',
       user: document.UsuarioBaixa || 'Não informado',
-      value: Number.parseFloat(document.ValorBaixado) || 0,
+      value: Number.parseFloat(document.ValorOriginal) || 0,
     }))
 
   return {
@@ -236,9 +185,15 @@ function summarizeFinancial(documents, clients, from, to) {
       movementsConsolidated: consolidation.movementsConsolidated,
       duplicatesRemoved: documents.length - uniqueDocuments.length,
       paidDocuments: uniquePositiveDocuments.size,
-      positive,
-      negative,
-      net,
+      original,
+      interest,
+      fine,
+      fees: roundMoney(interest + fine),
+      discount,
+      received,
+      positive: original,
+      negative: roundMoney(-discount),
+      net: original,
       zeroValue,
     },
     groups: groupRows,

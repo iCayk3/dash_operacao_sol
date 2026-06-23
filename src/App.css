@@ -69,6 +69,11 @@
 .kpi-card .MuiChip-root { height: 24px; font-size: 11px; border-color: #cce7db; background: #f7fcfa; }
 .kpi-card .MuiChip-icon { font-size: 14px; }
 .kpi-value { margin-top: 3px !important; color: #172b3a; font-size: clamp(24px, 2vw, 31px) !important; font-weight: 700 !important; letter-spacing: -.035em !important; }
+.financial-kpi-card .MuiChip-root { max-width: 145px; }
+.financial-kpi-values { display: flex; align-items: stretch; gap: 12px; margin-top: 7px; }
+.financial-kpi-values > div:not(.MuiDivider-root) { flex: 1; min-width: 0; }
+.financial-kpi-value { color: #8b6db1; font-size: clamp(17px, 1.45vw, 23px) !important; font-weight: 700 !important; letter-spacing: -.035em !important; white-space: nowrap; }
+.financial-kpi-value.received { color: #176b87; }
 
 .content-grid {
   display: grid;
