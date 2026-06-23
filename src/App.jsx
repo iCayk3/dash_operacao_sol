@@ -74,11 +74,8 @@ function localIsoDate(date = new Date()) {
 }
 
 function getMonthPeriod(year, monthIndex) {
-  const today = new Date()
   const firstDay = new Date(year, monthIndex, 1)
-  const lastDay = year === today.getFullYear() && monthIndex === today.getMonth()
-    ? today
-    : new Date(year, monthIndex + 1, 0)
+  const lastDay = new Date(year, monthIndex + 1, 0)
   return { from: localIsoDate(firstDay), to: localIsoDate(lastDay) }
 }
 
@@ -125,27 +122,30 @@ function KpiCard({ title, value, detail, icon: Icon, color, tint }) {
   )
 }
 
-function FinancialKpiCard({ original = 0, received = 0, discount = 0 }) {
+function FinancialKpiCard({ billed = 0, received = 0, open = 0, collectionRate = 0 }) {
   return (
     <Paper className="kpi-card financial-kpi-card">
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
         <Avatar variant="rounded" sx={{ bgcolor: '#F0EAF6', color: '#8B6DB1', width: 44, height: 44 }}>
           <AccountBalanceWalletRoundedIcon />
         </Avatar>
-        <Chip size="small" color="error" variant="outlined" label={`${compactMoney.format(discount)} descontos`} />
+        <Chip size="small" color="success" variant="outlined" label={`${collectionRate.toFixed(1).replace('.', ',')}% recebido`} />
       </Stack>
-      <Typography color="text.secondary" mt={2}>Financeiro do período</Typography>
+      <Typography color="text.secondary" mt={2}>Faturamento do período</Typography>
       <Box className="financial-kpi-values">
         <Box>
-          <Typography variant="caption" color="text.secondary">Sem desconto</Typography>
-          <Typography className="financial-kpi-value">{compactMoney.format(original)}</Typography>
+          <Typography variant="caption" color="text.secondary">Faturado</Typography>
+          <Typography className="financial-kpi-value">{compactMoney.format(billed)}</Typography>
         </Box>
         <Divider orientation="vertical" flexItem />
         <Box>
-          <Typography variant="caption" color="text.secondary">Com desconto</Typography>
+          <Typography variant="caption" color="text.secondary">Recebido</Typography>
           <Typography className="financial-kpi-value received">{compactMoney.format(received)}</Typography>
         </Box>
       </Box>
+      <Typography variant="caption" color="error.main" mt={0.7} display="block">
+        Falta receber: {compactMoney.format(open)}
+      </Typography>
     </Paper>
   )
 }
@@ -331,6 +331,7 @@ function ReceiptsChart({ daily = [] }) {
 
 function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, onRefresh }) {
   const totals = data?.totals || {}
+  const billing = data?.billing?.totals || {}
   return (
     <Panel
       title="Fluxo financeiro"
@@ -347,6 +348,23 @@ function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, on
           ))}
         </Stack>
       </Stack>
+      <Box className="billing-overview">
+        <Box className="billing-metric billed">
+          <Typography variant="caption" color="text.secondary">Faturado no período</Typography>
+          <Typography className="billing-value">{money.format(billing.billed || 0)}</Typography>
+          <Typography variant="caption" color="text.secondary">{(billing.documents || 0).toLocaleString('pt-BR')} documentos</Typography>
+        </Box>
+        <Box className="billing-metric received">
+          <Typography variant="caption" color="text.secondary">Já recebido</Typography>
+          <Typography className="billing-value">{money.format(billing.received || 0)}</Typography>
+          <Typography variant="caption" color="success.main">{(billing.collectionRate || 0).toFixed(1).replace('.', ',')}% do faturado</Typography>
+        </Box>
+        <Box className="billing-metric open">
+          <Typography variant="caption" color="text.secondary">Falta receber</Typography>
+          <Typography className="billing-value">{money.format(billing.open || 0)}</Typography>
+          <Typography variant="caption" color="error.main">{(billing.openDocuments || 0).toLocaleString('pt-BR')} documentos em aberto</Typography>
+        </Box>
+      </Box>
       {loading && !data ? <Box className="loading-state"><CircularProgress size={28} /><Typography color="text.secondary">Consultando documentos baixados…</Typography></Box> : <FinancialByGroupTable groups={data?.groups} />}
       <Box className="finance-summary">
         <Box><Typography variant="caption" color="text.secondary">Sem desconto (valor original)</Typography><Typography fontWeight={700}>{money.format(totals.original || 0)}</Typography></Box>
@@ -566,7 +584,7 @@ function App() {
   const activeClients = clientsSummary?.statuses?.active || 0
   const totalClients = clientsSummary?.total || 0
   const activePercentage = totalClients ? `${((activeClients / totalClients) * 100).toFixed(1).replace('.', ',')}% ativos` : 'API RouterBox'
-  const financialTotals = financialData?.totals || {}
+  const billingTotals = financialData?.billing?.totals || {}
   const attendanceTotals = attendanceData?.totals || {}
   const isRefreshing = clientsLoading || financialLoading || attendanceLoading
 
@@ -605,9 +623,10 @@ function App() {
             <KpiCard title="Clientes ativos" value={activeClients.toLocaleString('pt-BR')} detail={activePercentage} icon={GroupsRoundedIcon} color="#176B87" tint="#DDEFF3" />
             <KpiCard title="Total de clientes" value={totalClients.toLocaleString('pt-BR')} detail="API RouterBox" icon={DescriptionRoundedIcon} color="#2D9C75" tint="#E2F3EC" />
             <FinancialKpiCard
-              original={financialTotals.original}
-              received={financialTotals.received}
-              discount={financialTotals.discount}
+              billed={billingTotals.billed}
+              received={billingTotals.received}
+              open={billingTotals.open}
+              collectionRate={billingTotals.collectionRate}
             />
             <KpiCard title="Atendimentos abertos" value={(attendanceTotals.open || 0).toLocaleString('pt-BR')} detail={`${(attendanceTotals.completed || 0).toLocaleString('pt-BR')} concluídos`} icon={SupportAgentRoundedIcon} color="#E27B58" tint="#FBEAE5" />
           </Box>

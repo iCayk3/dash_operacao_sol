@@ -84,7 +84,7 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const period = financial?.period || attendance?.period
   const clientStatuses = clients?.statuses || {}
-  const financialTotals = financial?.totals || {}
+  const billingTotals = financial?.billing?.totals || {}
   const attendanceTotals = attendance?.totals || {}
 
   doc.setFillColor(...COLORS.primary)
@@ -112,13 +112,13 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
 
   addKpi(doc, 14, 43, 42, 'Clientes ativos', (clientStatuses.active || 0).toLocaleString('pt-BR'), COLORS.primary)
   addKpi(doc, 60, 43, 42, 'Total de clientes', (clients?.total || 0).toLocaleString('pt-BR'), COLORS.success)
-  addKpi(doc, 106, 43, 42, 'Sem desconto', money.format(financialTotals.original || 0), [139, 109, 177])
+  addKpi(doc, 106, 43, 42, 'Faturado', money.format(billingTotals.billed || 0), [139, 109, 177])
   addKpi(doc, 152, 43, 44, 'Atendimentos abertos', (attendanceTotals.open || 0).toLocaleString('pt-BR'), [226, 123, 88])
 
   doc.setTextColor(...COLORS.muted)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  doc.text(`Com desconto: ${money.format(financialTotals.received || 0)}`, 106, 69)
+  doc.text(`Recebido: ${money.format(billingTotals.received || 0)} | Pendente: ${money.format(billingTotals.open || 0)}`, 106, 69)
 
   let y = addSectionTitle(doc, 'Clientes por situacao', 75)
   autoTable(doc, {

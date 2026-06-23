@@ -2,7 +2,13 @@ import dotenv from 'dotenv'
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fetchAttendances, fetchClients, fetchPaidDocuments, summarizeClients } from './routerbox.js'
+import {
+  fetchAttendances,
+  fetchClients,
+  fetchOpenDocuments,
+  fetchPaidDocuments,
+  summarizeClients,
+} from './routerbox.js'
 
 dotenv.config({ path: '.env.local', quiet: true })
 
@@ -203,6 +209,88 @@ function summarizeFinancial(documents, clients, from, to) {
   }
 }
 
+function summarizeBilling(openDocuments, paidDocuments, clients, from, to) {
+  const clientGroups = new Map(clients.map((client) => [
+    String(client.Codigo),
+    getGroup(client),
+  ]))
+  const openByDocument = new Map()
+  const paidByDocument = new Map()
+
+  for (const document of openDocuments) {
+    const key = `${document.CliFor}:${document.Documento || document.NossoNumero || document.Sequencia}`
+    if (!openByDocument.has(key)) openByDocument.set(key, document)
+  }
+
+  const paidInDuePeriod = paidDocuments.filter((document) => (
+    String(document.Historico || '').trim() === 'Documento a receber'
+    && String(document.Origem || '').trim() === 'FAT'
+    && String(document.DataVencimento || '') >= from
+    && String(document.DataVencimento || '') <= to
+  ))
+
+  for (const document of paidInDuePeriod) {
+    const key = `${document.CodigoPessoa}:${document.Documento || document.NossoNumero || document.Sequencia}`
+    if (!paidByDocument.has(key)) paidByDocument.set(key, document)
+  }
+
+  const groups = new Map()
+  let open = 0
+  let received = 0
+
+  function ensureGroup(clientCode) {
+    const group = clientGroups.get(String(clientCode)) || { id: null, name: 'GRUPO NÃO IDENTIFICADO' }
+    const key = group.id || group.name
+    if (!groups.has(key)) groups.set(key, {
+      groupId: group.id,
+      groupName: group.name,
+      billed: 0,
+      received: 0,
+      open: 0,
+      documents: 0,
+    })
+    return groups.get(key)
+  }
+
+  for (const document of openByDocument.values()) {
+    const value = Number.parseFloat(document.Valor) || 0
+    open = roundMoney(open + value)
+    const group = ensureGroup(document.CliFor)
+    group.open = roundMoney(group.open + value)
+    group.billed = roundMoney(group.billed + value)
+    group.documents += 1
+  }
+
+  for (const document of paidByDocument.values()) {
+    const value = Number.parseFloat(document.ValorOriginal) || 0
+    received = roundMoney(received + value)
+    const group = ensureGroup(document.CodigoPessoa)
+    group.received = roundMoney(group.received + value)
+    group.billed = roundMoney(group.billed + value)
+    group.documents += 1
+  }
+
+  const billed = roundMoney(received + open)
+  return {
+    period: { from, to },
+    totals: {
+      billed,
+      received,
+      open,
+      collectionRate: billed ? (received / billed) * 100 : 0,
+      documents: openByDocument.size + paidByDocument.size,
+      openDocuments: openByDocument.size,
+      receivedDocuments: paidByDocument.size,
+    },
+    groups: [...groups.values()]
+      .map((group) => ({
+        ...group,
+        collectionRate: group.billed ? (group.received / group.billed) * 100 : 0,
+      }))
+      .sort((a, b) => b.billed - a.billed),
+  }
+}
+
 const attendanceStatusNames = {
   F: 'Na fila',
   A: 'A caminho',
@@ -351,11 +439,15 @@ app.get('/api/financeiro/resumo', async (request, response) => {
     const cacheIsValid = cached && Date.now() - cached.cachedAt < cacheTtl
     if (!forceRefresh && cacheIsValid) return response.json({ ...cached.data, cached: true })
 
-    const [documents, clients] = await Promise.all([
+    const [documents, openDocuments, clients] = await Promise.all([
       fetchPaidDocuments(from, to),
+      fetchOpenDocuments(from, to),
       getClients(forceRefresh),
     ])
-    const data = summarizeFinancial(documents, clients, from, to)
+    const data = {
+      ...summarizeFinancial(documents, clients, from, to),
+      billing: summarizeBilling(openDocuments, documents, clients, from, to),
+    }
     financialCache.set(cacheKey, { data, cachedAt: Date.now() })
     return response.json({ ...data, cached: false })
   } catch (error) {

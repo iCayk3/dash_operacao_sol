@@ -104,3 +104,9 @@ export function fetchAttendances(from, to) {
     Filtro: `Atendimentos.Data_AB >= '${from}' AND Atendimentos.Data_AB <= '${to}'`,
   })
 }
+
+export function fetchOpenDocuments(from, to) {
+  return routerboxRequest('ConsultaDocumentosAbertos', {
+    Filtro: `Origem = 'FAT' AND Vencimento >= '${from}' AND Vencimento <= '${to}'`,
+  })
+}
