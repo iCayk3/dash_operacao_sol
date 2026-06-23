@@ -105,8 +105,8 @@ export function fetchAttendances(from, to) {
   })
 }
 
-export function fetchOpenDocuments(from, to) {
+export function fetchOpenDocuments(from, to, launchFrom, launchTo) {
   return routerboxRequest('ConsultaDocumentosAbertos', {
-    Filtro: `Origem = 'FAT' AND Vencimento >= '${from}' AND Vencimento <= '${to}'`,
+    Filtro: `Origem = 'FAT' AND Vencimento >= '${from}' AND Vencimento <= '${to}' AND DataLancto >= '${launchFrom}' AND DataLancto <= '${launchTo}'`,
   })
 }

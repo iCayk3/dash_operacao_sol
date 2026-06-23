@@ -365,6 +365,12 @@ function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, on
           <Typography variant="caption" color="error.main">{(billing.openDocuments || 0).toLocaleString('pt-BR')} documentos em aberto</Typography>
         </Box>
       </Box>
+      {data?.billing?.period?.launchFrom && (
+        <Typography variant="caption" color="text.secondary" display="block" mx={2.5} mb={1.5}>
+          Safra considerada: lançamentos de {data.billing.period.launchFrom.split('-').reverse().join('/')} a {data.billing.period.launchTo.split('-').reverse().join('/')}, com vencimento de {data.billing.period.from.split('-').reverse().join('/')} a {(data.billing.period.adjustedTo || data.billing.period.to).split('-').reverse().join('/')}
+          {data.billing.period.dueDateAdjusted ? ' (fim ajustado para o próximo dia útil).' : '.'} Baixas verificadas até {data.billing.period.paidTo.split('-').reverse().join('/')}.
+        </Typography>
+      )}
       {loading && !data ? <Box className="loading-state"><CircularProgress size={28} /><Typography color="text.secondary">Consultando documentos baixados…</Typography></Box> : <FinancialByGroupTable groups={data?.groups} />}
       <Box className="finance-summary">
         <Box><Typography variant="caption" color="text.secondary">Sem desconto (valor original)</Typography><Typography fontWeight={700}>{money.format(totals.original || 0)}</Typography></Box>

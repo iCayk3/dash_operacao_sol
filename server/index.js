@@ -51,6 +51,40 @@ function localIsoDate(date = new Date()) {
   return offsetDate.toISOString().slice(0, 10)
 }
 
+function getPreviousMonthPeriod(referenceDate) {
+  const [year, month] = referenceDate.split('-').map(Number)
+  const firstDay = new Date(year, month - 2, 1)
+  const lastDay = new Date(year, month - 1, 0)
+  return {
+    from: localIsoDate(firstDay),
+    to: localIsoDate(lastDay),
+  }
+}
+
+function getBillingDuePeriod(from, to) {
+  const [year, month] = from.split('-').map(Number)
+  const nominalDay30 = new Date(year, month - 1, 30)
+  const nominalMonth = month - 1
+  let adjustedTo = to
+
+  if (nominalDay30.getMonth() === nominalMonth && [0, 6].includes(nominalDay30.getDay())) {
+    const nextBusinessDay = new Date(nominalDay30)
+    do {
+      nextBusinessDay.setDate(nextBusinessDay.getDate() + 1)
+    } while ([0, 6].includes(nextBusinessDay.getDay()))
+
+    const shiftedDate = localIsoDate(nextBusinessDay)
+    if (shiftedDate > adjustedTo) adjustedTo = shiftedDate
+  }
+
+  return {
+    from,
+    nominalTo: to,
+    adjustedTo,
+    wasAdjusted: adjustedTo !== to,
+  }
+}
+
 function getGroup(client) {
   const id = String(client?.Grupo || '').trim()
   if (!id) return { id: null, name: 'GRUPO NÃO INFORMADO' }
@@ -209,7 +243,8 @@ function summarizeFinancial(documents, clients, from, to) {
   }
 }
 
-function summarizeBilling(openDocuments, paidDocuments, clients, from, to) {
+function summarizeBilling(openDocuments, paidDocuments, clients, duePeriod, launchPeriod) {
+  const { from, nominalTo, adjustedTo } = duePeriod
   const clientGroups = new Map(clients.map((client) => [
     String(client.Codigo),
     getGroup(client),
@@ -226,13 +261,17 @@ function summarizeBilling(openDocuments, paidDocuments, clients, from, to) {
     String(document.Historico || '').trim() === 'Documento a receber'
     && String(document.Origem || '').trim() === 'FAT'
     && String(document.DataVencimento || '') >= from
-    && String(document.DataVencimento || '') <= to
+    && String(document.DataVencimento || '') <= adjustedTo
+    && String(document.DataLancamento || '') >= launchPeriod.from
+    && String(document.DataLancamento || '') <= launchPeriod.to
   ))
 
   for (const document of paidInDuePeriod) {
     const key = `${document.CodigoPessoa}:${document.Documento || document.NossoNumero || document.Sequencia}`
     if (!paidByDocument.has(key)) paidByDocument.set(key, document)
   }
+
+  for (const key of paidByDocument.keys()) openByDocument.delete(key)
 
   const groups = new Map()
   let open = 0
@@ -272,7 +311,14 @@ function summarizeBilling(openDocuments, paidDocuments, clients, from, to) {
 
   const billed = roundMoney(received + open)
   return {
-    period: { from, to },
+    period: {
+      from,
+      to: nominalTo,
+      adjustedTo,
+      dueDateAdjusted: duePeriod.wasAdjusted,
+      launchFrom: launchPeriod.from,
+      launchTo: launchPeriod.to,
+    },
     totals: {
       billed,
       received,
@@ -439,15 +485,23 @@ app.get('/api/financeiro/resumo', async (request, response) => {
     const cacheIsValid = cached && Date.now() - cached.cachedAt < cacheTtl
     if (!forceRefresh && cacheIsValid) return response.json({ ...cached.data, cached: true })
 
-    const [documents, openDocuments, clients] = await Promise.all([
-      fetchPaidDocuments(from, to),
-      fetchOpenDocuments(from, to),
+    const launchPeriod = getPreviousMonthPeriod(from)
+    const duePeriod = getBillingDuePeriod(from, to)
+    const documentsPromise = fetchPaidDocuments(from, to)
+    const billingPaidTo = localIsoDate()
+    const billingDocumentsPromise = fetchPaidDocuments(launchPeriod.from, billingPaidTo)
+    const [documents, billingPaidDocuments, openDocuments, clients] = await Promise.all([
+      documentsPromise,
+      billingDocumentsPromise,
+      fetchOpenDocuments(from, duePeriod.adjustedTo, launchPeriod.from, launchPeriod.to),
       getClients(forceRefresh),
     ])
     const data = {
       ...summarizeFinancial(documents, clients, from, to),
-      billing: summarizeBilling(openDocuments, documents, clients, from, to),
+      billing: summarizeBilling(openDocuments, billingPaidDocuments, clients, duePeriod, launchPeriod),
     }
+    data.billing.period.paidFrom = launchPeriod.from
+    data.billing.period.paidTo = billingPaidTo
     financialCache.set(cacheKey, { data, cachedAt: Date.now() })
     return response.json({ ...data, cached: false })
   } catch (error) {
