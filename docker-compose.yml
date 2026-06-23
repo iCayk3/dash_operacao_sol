@@ -6,7 +6,7 @@ services:
     container_name: dashboard-sol-provedor
     restart: unless-stopped
     ports:
-      - "6000:6000"
+      - "6080:6000"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

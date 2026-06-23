@@ -41,7 +41,7 @@ ROUTERBOX_STATUS_AWAITING_INSTALLATION
 Após publicar a Stack, a dashboard ficará disponível em:
 
 ```text
-http://IP_DO_SERVIDOR:6000
+http://IP_DO_SERVIDOR:6080
 ```
 
 O Portainer clonará o repositório, construirá a imagem e injetará a chave somente durante a execução do contêiner.

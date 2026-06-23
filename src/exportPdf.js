@@ -46,10 +46,39 @@ function addKpi(doc, x, y, width, label, value, accent) {
   doc.text(String(value), x + 6, y + 16)
 }
 
+async function loadImageData(url) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Não foi possível carregar ${url}.`)
+  const blob = await response.blob()
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function addContainedImage(doc, imageData, x, y, maxWidth, maxHeight) {
+  const properties = doc.getImageProperties(imageData)
+  const scale = Math.min(maxWidth / properties.width, maxHeight / properties.height)
+  const width = properties.width * scale
+  const height = properties.height * scale
+  doc.addImage(
+    imageData,
+    'PNG',
+    x + (maxWidth - width) / 2,
+    y + (maxHeight - height) / 2,
+    width,
+    height,
+  )
+}
+
 export async function exportDashboardPdf({ clients, financial, attendance }) {
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+  const [{ jsPDF }, { default: autoTable }, logoData] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
+    loadImageData('/logo-sol.png').catch(() => null),
   ])
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
@@ -60,13 +89,18 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
 
   doc.setFillColor(...COLORS.primary)
   doc.rect(0, 0, 210, 35, 'F')
+  if (logoData) {
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(12, 6, 31, 23, 2.5, 2.5, 'F')
+    addContainedImage(doc, logoData, 14, 8, 27, 19)
+  }
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.text('SOL Provedor', 14, 15)
+  doc.setFontSize(logoData ? 16 : 20)
+  doc.text('SOL Provedor', logoData ? 48 : 14, 15)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
-  doc.text('Relatorio executivo da operacao', 14, 23)
+  doc.text('Relatorio executivo da operacao', logoData ? 48 : 14, 23)
   doc.setFontSize(9)
   doc.text(
     period ? `Periodo: ${formatDate(period.from)} a ${formatDate(period.to)}` : 'Periodo atual',

@@ -55,6 +55,90 @@ function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
+function getFinancialDocumentSignature(document) {
+  return [
+    document.CodigoPessoa,
+    document.Documento,
+    document.NossoNumero,
+    document.DataBaixa,
+    document.DataHoraExecucaoBaixa,
+    document.ValorOriginal,
+    document.ValorJuros,
+    document.ValorMulta,
+    document.ValorDesconto,
+    document.ValorBaixado,
+    document.Motivo,
+    document.Historico,
+    document.HistoricoBaixa,
+    document.UsuarioBaixa,
+  ].map((value) => String(value ?? '').trim()).join('|')
+}
+
+function deduplicateFinancialDocuments(documents) {
+  const signatures = new Set()
+  const uniqueDocuments = []
+
+  for (const document of documents) {
+    const signature = getFinancialDocumentSignature(document)
+    if (signatures.has(signature)) continue
+    signatures.add(signature)
+    uniqueDocuments.push(document)
+  }
+
+  return {
+    documents: uniqueDocuments,
+    duplicatesRemoved: documents.length - uniqueDocuments.length,
+  }
+}
+
+function consolidateFinancialDocuments(documents) {
+  const deduplicated = deduplicateFinancialDocuments(documents)
+  const documentsByBill = new Map()
+
+  for (const document of deduplicated.documents) {
+    const billNumber = document.Documento || document.NossoNumero || document.Sequencia
+    const key = [
+      document.CodigoPessoa,
+      billNumber,
+      document.DataBaixa,
+    ].map((value) => String(value ?? '').trim()).join('|')
+
+    if (!documentsByBill.has(key)) documentsByBill.set(key, new Map())
+
+    const movements = documentsByBill.get(key)
+    const value = roundMoney(Number.parseFloat(document.ValorBaixado) || 0)
+    const valueKey = value.toFixed(2)
+
+    if (!movements.has(valueKey)) {
+      movements.set(valueKey, {
+        ...document,
+        ValorBaixado: value,
+        MovimentosConsolidados: 1,
+      })
+      continue
+    }
+
+    const existing = movements.get(valueKey)
+    existing.MovimentosConsolidados += 1
+
+    const existingHistory = String(existing.Historico || '').trim()
+    const currentHistory = String(document.Historico || '').trim()
+    if (!existingHistory && currentHistory) existing.Historico = document.Historico
+
+    if (String(document.DataHoraExecucaoBaixa) > String(existing.DataHoraExecucaoBaixa)) {
+      existing.DataHoraExecucaoBaixa = document.DataHoraExecucaoBaixa
+      existing.UsuarioBaixa = document.UsuarioBaixa
+    }
+  }
+
+  const consolidatedDocuments = [...documentsByBill.values()].flatMap((movements) => [...movements.values()])
+  return {
+    documents: consolidatedDocuments,
+    exactDuplicatesRemoved: deduplicated.duplicatesRemoved,
+    movementsConsolidated: deduplicated.documents.length - consolidatedDocuments.length,
+  }
+}
+
 async function getClients(forceRefresh = false) {
   const cacheIsValid = clientsCache && Date.now() - clientsCache.cachedAt < cacheTtl
   if (!forceRefresh && cacheIsValid) return clientsCache.clients
@@ -73,6 +157,8 @@ async function getClients(forceRefresh = false) {
 }
 
 function summarizeFinancial(documents, clients, from, to) {
+  const consolidation = consolidateFinancialDocuments(documents)
+  const uniqueDocuments = consolidation.documents
   const clientGroups = new Map(clients.map((client) => [
     String(client.Codigo),
     getGroup(client),
@@ -84,7 +170,7 @@ function summarizeFinancial(documents, clients, from, to) {
   let negative = 0
   let zeroValue = 0
 
-  for (const document of documents) {
+  for (const document of uniqueDocuments) {
     const value = Number.parseFloat(document.ValorBaixado) || 0
     const group = clientGroups.get(String(document.CodigoPessoa)) || { id: null, name: 'GRUPO NÃO IDENTIFICADO' }
     const groupKey = group.id || group.name
@@ -126,7 +212,7 @@ function summarizeFinancial(documents, clients, from, to) {
     }))
     .sort((a, b) => b.net - a.net)
 
-  const recent = [...documents]
+  const recent = [...uniqueDocuments]
     .sort((a, b) => String(b.DataHoraExecucaoBaixa || b.DataBaixa).localeCompare(String(a.DataHoraExecucaoBaixa || a.DataBaixa)))
     .slice(0, 12)
     .map((document) => ({
@@ -144,7 +230,11 @@ function summarizeFinancial(documents, clients, from, to) {
   return {
     period: { from, to },
     totals: {
-      records: documents.length,
+      records: uniqueDocuments.length,
+      rawRecords: documents.length,
+      exactDuplicatesRemoved: consolidation.exactDuplicatesRemoved,
+      movementsConsolidated: consolidation.movementsConsolidated,
+      duplicatesRemoved: documents.length - uniqueDocuments.length,
       paidDocuments: uniquePositiveDocuments.size,
       positive,
       negative,

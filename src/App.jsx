@@ -331,6 +331,11 @@ function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, on
         <Divider orientation="vertical" flexItem />
         <Box><Typography variant="caption" color="text.secondary">Recebimento líquido</Typography><Typography fontWeight={700} color="primary.main">{money.format(totals.net || 0)}</Typography></Box>
       </Box>
+      {(totals.duplicatesRemoved || 0) > 0 && (
+        <Typography variant="caption" color="text.secondary" display="block" mx={2.5} mb={1}>
+          {totals.duplicatesRemoved.toLocaleString('pt-BR')} lançamento(s) repetido(s) do mesmo boleto consolidado(s) automaticamente.
+        </Typography>
+      )}
       <ReceiptsChart daily={data?.daily} />
     </Panel>
   )
