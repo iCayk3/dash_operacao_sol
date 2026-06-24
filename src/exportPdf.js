@@ -118,17 +118,17 @@ export async function exportDashboardPdf({ clients, financial, attendance }) {
   doc.setTextColor(...COLORS.muted)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  doc.text(`Recebido: ${money.format(billingTotals.received || 0)} | Pendente: ${money.format(billingTotals.open || 0)}`, 106, 69)
+  doc.text(`Recebido: ${money.format(billingTotals.received || 0)} | Pendente: ${money.format(billingTotals.open || 0)}`, 14, 71)
   if (financial?.billing?.period?.launchFrom) {
     doc.setFontSize(7)
     doc.text(
       `Safra: lancamentos ${formatDate(financial.billing.period.launchFrom)} a ${formatDate(financial.billing.period.launchTo)} | vencimentos ate ${formatDate(financial.billing.period.adjustedTo || financial.billing.period.to)}`,
       14,
-      72,
+      77,
     )
   }
 
-  let y = addSectionTitle(doc, 'Clientes por situacao', 75)
+  let y = addSectionTitle(doc, 'Clientes por situacao', 88)
   autoTable(doc, {
     startY: y,
     head: [['Situacao', 'Quantidade', 'Participacao']],

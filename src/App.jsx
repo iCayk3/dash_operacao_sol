@@ -366,7 +366,7 @@ function FinancialPanel({ data, loading, error, selectedMonth, onMonthChange, on
         </Box>
       </Box>
       {data?.billing?.period?.launchFrom && (
-        <Typography variant="caption" color="text.secondary" display="block" mx={2.5} mb={1.5}>
+        <Typography className="billing-period-note" variant="caption" color="text.secondary">
           Safra considerada: lançamentos de {data.billing.period.launchFrom.split('-').reverse().join('/')} a {data.billing.period.launchTo.split('-').reverse().join('/')}, com vencimento de {data.billing.period.from.split('-').reverse().join('/')} a {(data.billing.period.adjustedTo || data.billing.period.to).split('-').reverse().join('/')}
           {data.billing.period.dueDateAdjusted ? ' (fim ajustado para o próximo dia útil).' : '.'} Baixas verificadas até {data.billing.period.paidTo.split('-').reverse().join('/')}.
         </Typography>

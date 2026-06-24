@@ -77,6 +77,7 @@
 .billing-overview {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  align-items: stretch;
   gap: 12px;
   margin: 0 20px 18px;
 }
@@ -87,11 +88,25 @@
   border: 1px solid #e5ebef;
   border-radius: 11px;
   background: #fafcfd;
+  min-width: 0;
+  min-height: 114px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .billing-metric::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: #8b6db1; }
 .billing-metric.received::before { background: #2d9c75; }
 .billing-metric.open::before { background: #e27b58; }
 .billing-value { margin: 3px 0 1px !important; color: #172b3a; font-size: 20px !important; font-weight: 700 !important; letter-spacing: -.025em !important; }
+.billing-period-note {
+  display: block;
+  margin: 0 20px 18px !important;
+  padding: 10px 12px;
+  border: 1px solid #e5ebef;
+  border-radius: 9px;
+  background: #f7fafb;
+  line-height: 1.5 !important;
+}
 
 .content-grid {
   display: grid;
@@ -117,6 +132,15 @@
 .panel-body { padding: 20px; }
 .finance-panel .panel-body { padding: 20px 0 0; }
 .finance-panel .filter-row, .finance-panel .chart-block { margin-left: 20px; margin-right: 20px; }
+.finance-panel .filter-row {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.finance-panel .filter-row > .MuiChip-root { flex: 0 0 auto; }
+.finance-panel .filter-row > .MuiStack-root {
+  min-width: 0;
+  flex: 1 1 520px;
+}
 
 .donut-wrap { display: grid; grid-template-columns: 154px 1fr; gap: 24px; align-items: center; padding: 10px 0; }
 .donut {
@@ -229,6 +253,7 @@
   .donut { width: 130px; }
   .finance-summary { margin: 16px; gap: 14px; overflow-x: auto; }
   .billing-overview { grid-template-columns: 1fr; margin: 0 16px 16px; }
+  .billing-period-note { margin: 0 16px 16px !important; }
   .finance-summary > div:not(.MuiDivider-root) { min-width: 125px; }
   .chart svg { height: 160px; }
 }
